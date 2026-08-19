@@ -40,8 +40,9 @@ class ExampleRobolectricTest {
     // Simulate wake word state updates
     AssistantStateRepository.setExplicitlyStopped(context, false)
     AssistantStateRepository.setAssistantActive(true)
-    AssistantStateRepository.updateListeningState(com.example.speech.SpeechListeningState.WAITING_FOR_WAKE_WORD)
+    AssistantStateRepository.updateListeningState(com.example.speech.SpeechListeningState.WAITING_FOR_NOVA)
     viewModel.syncState(context)
+
 
     assertTrue(viewModel.uiState.value.isAssistantActive)
     assertEquals("WAITING FOR 'NOVA'", viewModel.uiState.value.statusText)

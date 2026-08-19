@@ -10,7 +10,7 @@ data class VoxoraUiState(
     val statusText: String
         get() = when {
             !isAssistantActive -> "ASSISTANT STOPPED"
-            listeningState == SpeechListeningState.WAITING_FOR_WAKE_WORD -> "WAITING FOR 'NOVA'"
+            listeningState == SpeechListeningState.WAITING_FOR_NOVA -> "WAITING FOR 'NOVA'"
             listeningState == SpeechListeningState.LISTENING_FOR_COMMAND -> "LISTENING FOR COMMAND"
             listeningState == SpeechListeningState.PROCESSING -> "PROCESSING COMMAND"
             listeningState == SpeechListeningState.ERROR -> "LISTENING ERROR"
@@ -23,12 +23,13 @@ data class VoxoraUiState(
     val infoMessage: String
         get() = when {
             !isAssistantActive -> "Start Voxora to activate your voice assistant."
-            listeningState == SpeechListeningState.WAITING_FOR_WAKE_WORD -> "Say 'Nova' to activate..."
+            listeningState == SpeechListeningState.WAITING_FOR_NOVA -> "Say 'Nova' to activate..."
             listeningState == SpeechListeningState.LISTENING_FOR_COMMAND -> "Listening for your command..."
             listeningState == SpeechListeningState.PROCESSING -> "Processing command..."
             listeningState == SpeechListeningState.ERROR -> "Listening error occurred. Retrying..."
             else -> "Voxora is active and listening in background."
         }
 }
+
 
 
