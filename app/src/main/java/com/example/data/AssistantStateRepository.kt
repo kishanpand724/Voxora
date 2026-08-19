@@ -4,6 +4,7 @@ import android.app.ActivityManager
 import android.content.Context
 import android.content.SharedPreferences
 import com.example.service.VoiceAssistantService
+import com.example.speech.SpeechListeningState
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -16,6 +17,12 @@ object AssistantStateRepository {
     private val _isAssistantActive = MutableStateFlow(false)
     val isAssistantActive: StateFlow<Boolean> = _isAssistantActive.asStateFlow()
 
+    private val _listeningState = MutableStateFlow(SpeechListeningState.STOPPED)
+    val listeningState: StateFlow<SpeechListeningState> = _listeningState.asStateFlow()
+
+    private val _lastRecognizedText = MutableStateFlow<String?>(null)
+    val lastRecognizedText: StateFlow<String?> = _lastRecognizedText.asStateFlow()
+
     private fun getPrefs(context: Context): SharedPreferences {
         return context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
     }
@@ -23,6 +30,9 @@ object AssistantStateRepository {
     fun setExplicitlyStopped(context: Context, stopped: Boolean) {
         getPrefs(context).edit().putBoolean(KEY_EXPLICITLY_STOPPED, stopped).apply()
         _isAssistantActive.value = !stopped
+        if (stopped) {
+            _listeningState.value = SpeechListeningState.STOPPED
+        }
     }
 
     fun isExplicitlyStopped(context: Context): Boolean {
@@ -31,6 +41,17 @@ object AssistantStateRepository {
 
     fun setAssistantActive(active: Boolean) {
         _isAssistantActive.value = active
+        if (!active) {
+            _listeningState.value = SpeechListeningState.STOPPED
+        }
+    }
+
+    fun updateListeningState(state: SpeechListeningState) {
+        _listeningState.value = state
+    }
+
+    fun updateRecognizedText(text: String?) {
+        _lastRecognizedText.value = text
     }
 
     fun syncServiceState(context: Context) {
@@ -39,6 +60,7 @@ object AssistantStateRepository {
             _isAssistantActive.value = true
         } else if (isExplicitlyStopped(context)) {
             _isAssistantActive.value = false
+            _listeningState.value = SpeechListeningState.STOPPED
         }
     }
 
@@ -53,4 +75,5 @@ object AssistantStateRepository {
         return false
     }
 }
+
 

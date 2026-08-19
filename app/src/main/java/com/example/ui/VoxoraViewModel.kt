@@ -24,12 +24,33 @@ class VoxoraViewModel : ViewModel() {
                 }
             }
         }
+        viewModelScope.launch {
+            AssistantStateRepository.listeningState.collect { state ->
+                _uiState.update { currentState ->
+                    currentState.copy(listeningState = state)
+                }
+            }
+        }
+        viewModelScope.launch {
+            AssistantStateRepository.lastRecognizedText.collect { text ->
+                _uiState.update { currentState ->
+                    currentState.copy(lastRecognizedText = text)
+                }
+            }
+        }
     }
 
     fun syncState(context: Context) {
         AssistantStateRepository.syncServiceState(context)
-        _uiState.update { it.copy(isAssistantActive = AssistantStateRepository.isAssistantActive.value) }
+        _uiState.update { 
+            it.copy(
+                isAssistantActive = AssistantStateRepository.isAssistantActive.value,
+                listeningState = AssistantStateRepository.listeningState.value,
+                lastRecognizedText = AssistantStateRepository.lastRecognizedText.value
+            )
+        }
     }
+
 
     fun startAssistant(context: Context) {
         VoiceAssistantService.startService(context)

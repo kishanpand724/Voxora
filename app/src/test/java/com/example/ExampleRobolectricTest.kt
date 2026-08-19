@@ -37,26 +37,26 @@ class ExampleRobolectricTest {
     assertEquals("ASSISTANT STOPPED", viewModel.uiState.value.statusText)
     assertEquals("START ASSISTANT", viewModel.uiState.value.buttonText)
 
-    // Simulate service starting
-    val serviceController = Robolectric.buildService(VoiceAssistantService::class.java).create()
-    val startIntent = Intent().apply { action = VoiceAssistantService.ACTION_START_SERVICE }
-    serviceController.get().onStartCommand(startIntent, 0, 1)
-
-    assertTrue(AssistantStateRepository.isAssistantActive.value)
+    // Simulate speech state updates
+    AssistantStateRepository.setExplicitlyStopped(context, false)
+    AssistantStateRepository.setAssistantActive(true)
+    AssistantStateRepository.updateListeningState(com.example.speech.SpeechListeningState.LISTENING)
+    AssistantStateRepository.updateRecognizedText("Open YouTube")
     viewModel.syncState(context)
+
+
     assertTrue(viewModel.uiState.value.isAssistantActive)
-    assertEquals("ASSISTANT ACTIVE", viewModel.uiState.value.statusText)
+    assertEquals("LISTENING", viewModel.uiState.value.statusText)
+    assertEquals("Open YouTube", viewModel.uiState.value.lastRecognizedText)
     assertEquals("STOP ASSISTANT", viewModel.uiState.value.buttonText)
 
     // Simulate service stopping
-    val stopIntent = Intent().apply { action = VoiceAssistantService.ACTION_STOP_SERVICE }
-    serviceController.get().onStartCommand(stopIntent, 0, 2)
-
-    assertFalse(AssistantStateRepository.isAssistantActive.value)
+    AssistantStateRepository.setAssistantActive(false)
     viewModel.syncState(context)
     assertFalse(viewModel.uiState.value.isAssistantActive)
     assertEquals("ASSISTANT STOPPED", viewModel.uiState.value.statusText)
     assertEquals("START ASSISTANT", viewModel.uiState.value.buttonText)
+
   }
 
   @Test

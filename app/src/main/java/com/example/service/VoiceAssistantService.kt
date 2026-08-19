@@ -15,6 +15,7 @@ import androidx.core.app.NotificationCompat
 import com.example.MainActivity
 import com.example.R
 import com.example.data.AssistantStateRepository
+import com.example.speech.SpeechRecognitionManager
 
 class VoiceAssistantService : Service() {
 
@@ -49,10 +50,13 @@ class VoiceAssistantService : Service() {
         }
     }
 
+    private var speechManager: SpeechRecognitionManager? = null
+
     override fun onCreate() {
         super.onCreate()
         createNotificationChannel()
     }
+
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent == null) {
@@ -100,9 +104,17 @@ class VoiceAssistantService : Service() {
         }
 
         AssistantStateRepository.setAssistantActive(true)
+
+        if (speechManager == null) {
+            speechManager = SpeechRecognitionManager(this)
+        }
+        speechManager?.startListening()
     }
 
     private fun stopAssistantService() {
+        speechManager?.destroy()
+        speechManager = null
+
         AssistantStateRepository.setAssistantActive(false)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
             stopForeground(STOP_FOREGROUND_REMOVE)
@@ -112,6 +124,7 @@ class VoiceAssistantService : Service() {
         }
         stopSelf()
     }
+
 
     override fun onTaskRemoved(rootIntent: Intent?) {
         Log.d(TAG, "Task removed from recent apps")
@@ -178,9 +191,12 @@ class VoiceAssistantService : Service() {
 
     override fun onDestroy() {
         Log.d(TAG, "Service destroyed")
+        speechManager?.destroy()
+        speechManager = null
         AssistantStateRepository.setAssistantActive(false)
         super.onDestroy()
     }
+
 
     override fun onBind(intent: Intent?): IBinder? = null
 }

@@ -3,6 +3,7 @@ package com.example.ui
 import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Build
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -60,19 +61,48 @@ fun VoxoraMainScreen(
     }
 
     val permissionLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.RequestPermission()
-    ) { _ ->
-        viewModel.toggleAssistant(context)
+        contract = ActivityResultContracts.RequestMultiplePermissions()
+    ) { permissions ->
+        val recordAudioGranted = permissions[Manifest.permission.RECORD_AUDIO] ?: false
+        if (recordAudioGranted) {
+            viewModel.toggleAssistant(context)
+        } else {
+            Toast.makeText(
+                context,
+                "Microphone permission is required for voice recognition",
+                Toast.LENGTH_LONG
+            ).show()
+        }
     }
 
     val handleToggleAssistant = {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
-            !uiState.isAssistantActive &&
-            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
-        ) {
-            permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        if (uiState.isAssistantActive) {
+            viewModel.stopAssistant(context)
         } else {
-            viewModel.toggleAssistant(context)
+            val permissionsToRequest = mutableListOf<String>()
+            
+            if (ContextCompat.checkSelfPermission(
+                    context,
+                    Manifest.permission.RECORD_AUDIO
+                ) != PackageManager.PERMISSION_GRANTED
+            ) {
+                permissionsToRequest.add(Manifest.permission.RECORD_AUDIO)
+            }
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                ContextCompat.checkSelfPermission(
+                    context,
+                    Manifest.permission.POST_NOTIFICATIONS
+                ) != PackageManager.PERMISSION_GRANTED
+            ) {
+                permissionsToRequest.add(Manifest.permission.POST_NOTIFICATIONS)
+            }
+
+            if (permissionsToRequest.isNotEmpty()) {
+                permissionLauncher.launch(permissionsToRequest.toTypedArray())
+            } else {
+                viewModel.startAssistant(context)
+            }
         }
     }
 
@@ -82,6 +112,7 @@ fun VoxoraMainScreen(
         modifier = modifier
     )
 }
+
 
 @Composable
 fun VoxoraMainContent(
@@ -164,8 +195,10 @@ fun VoxoraMainContent(
 
                 InfoMessageCard(
                     isActive = uiState.isAssistantActive,
-                    infoMessage = uiState.infoMessage
+                    infoMessage = uiState.infoMessage,
+                    lastRecognizedText = uiState.lastRecognizedText
                 )
+
             }
         }
     }
