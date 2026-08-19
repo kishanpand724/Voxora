@@ -146,6 +146,8 @@ class VoiceAssistantService : Service() {
             .setContentText("Voice assistant is running in the background")
             .setSmallIcon(R.mipmap.ic_launcher)
             .setOngoing(true)
+            .setAutoCancel(false)
+            .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
             .setContentIntent(mainPendingIntent)
             .addAction(
                 android.R.drawable.ic_menu_close_clear_cancel,
@@ -154,7 +156,10 @@ class VoiceAssistantService : Service() {
             )
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setCategory(NotificationCompat.CATEGORY_SERVICE)
-            .build()
+            .build().apply {
+                flags = flags or Notification.FLAG_ONGOING_EVENT or Notification.FLAG_NO_CLEAR
+            }
+
     }
 
     private fun createNotificationChannel() {
