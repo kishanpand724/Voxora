@@ -92,7 +92,13 @@ class VoiceAssistantService : Service() {
                 startForeground(
                     NOTIFICATION_ID,
                     notification,
-                    ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
+                    ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE or ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
+                )
+            } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                startForeground(
+                    NOTIFICATION_ID,
+                    notification,
+                    ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
                 )
             } else {
                 startForeground(NOTIFICATION_ID, notification)
@@ -102,6 +108,7 @@ class VoiceAssistantService : Service() {
                 startForeground(NOTIFICATION_ID, notification)
             } catch (_: Exception) {}
         }
+
 
         AssistantStateRepository.setAssistantActive(true)
 
