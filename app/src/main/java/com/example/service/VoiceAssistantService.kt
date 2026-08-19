@@ -10,6 +10,7 @@ import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
+import android.util.Log
 import androidx.core.app.NotificationCompat
 import com.example.MainActivity
 import com.example.R
@@ -18,6 +19,8 @@ import com.example.data.AssistantStateRepository
 class VoiceAssistantService : Service() {
 
     companion object {
+        private const val TAG = "VoxoraService"
+
         const val CHANNEL_ID = "voxora_assistant_channel"
         const val CHANNEL_NAME = "Voxora Assistant Service"
         const val NOTIFICATION_ID = 1001
@@ -26,6 +29,7 @@ class VoiceAssistantService : Service() {
         const val ACTION_STOP_SERVICE = "com.example.voxora.ACTION_STOP_SERVICE"
 
         fun startService(context: Context) {
+            AssistantStateRepository.setExplicitlyStopped(context, false)
             val intent = Intent(context, VoiceAssistantService::class.java).apply {
                 action = ACTION_START_SERVICE
             }
@@ -37,6 +41,7 @@ class VoiceAssistantService : Service() {
         }
 
         fun stopService(context: Context) {
+            AssistantStateRepository.setExplicitlyStopped(context, true)
             val intent = Intent(context, VoiceAssistantService::class.java).apply {
                 action = ACTION_STOP_SERVICE
             }
@@ -50,11 +55,27 @@ class VoiceAssistantService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        if (intent?.action == ACTION_STOP_SERVICE) {
+        if (intent == null) {
+            // Service restarted by Android OS after system kill
+            if (AssistantStateRepository.isExplicitlyStopped(this)) {
+                stopAssistantService()
+                return START_NOT_STICKY
+            } else {
+                Log.d(TAG, "Service restarted by system")
+                startForegroundAssistantService()
+                return START_STICKY
+            }
+        }
+
+        if (intent.action == ACTION_STOP_SERVICE) {
+            Log.d(TAG, "Service stopped by user")
+            AssistantStateRepository.setExplicitlyStopped(this, true)
             stopAssistantService()
             return START_NOT_STICKY
         }
 
+        Log.d(TAG, "Service started")
+        AssistantStateRepository.setExplicitlyStopped(this, false)
         startForegroundAssistantService()
         return START_STICKY
     }
@@ -81,7 +102,6 @@ class VoiceAssistantService : Service() {
         AssistantStateRepository.setAssistantActive(true)
     }
 
-
     private fun stopAssistantService() {
         AssistantStateRepository.setAssistantActive(false)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
@@ -91,6 +111,11 @@ class VoiceAssistantService : Service() {
             stopForeground(true)
         }
         stopSelf()
+    }
+
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        Log.d(TAG, "Task removed from recent apps")
+        super.onTaskRemoved(rootIntent)
     }
 
     private fun createNotification(): Notification {
@@ -147,9 +172,11 @@ class VoiceAssistantService : Service() {
     }
 
     override fun onDestroy() {
+        Log.d(TAG, "Service destroyed")
         AssistantStateRepository.setAssistantActive(false)
         super.onDestroy()
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
 }
+

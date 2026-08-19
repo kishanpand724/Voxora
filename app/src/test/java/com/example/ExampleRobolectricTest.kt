@@ -59,7 +59,26 @@ class ExampleRobolectricTest {
     assertEquals("START ASSISTANT", viewModel.uiState.value.buttonText)
   }
 
+  @Test
+  fun `test service task removal and explicit stop state`() {
+    val context = ApplicationProvider.getApplicationContext<Context>()
+    
+    // Start service explicitly
+    VoiceAssistantService.startService(context)
+    assertFalse(AssistantStateRepository.isExplicitlyStopped(context))
+
+    val serviceController = Robolectric.buildService(VoiceAssistantService::class.java).create()
+    serviceController.get().onTaskRemoved(Intent())
+
+    // When task is removed, if not explicitly stopped, service remains configured as active
+    assertFalse(AssistantStateRepository.isExplicitlyStopped(context))
+
+    // Stop service explicitly
+    VoiceAssistantService.stopService(context)
+    assertTrue(AssistantStateRepository.isExplicitlyStopped(context))
+  }
 }
+
 
 
 

@@ -2,6 +2,7 @@ package com.example.data
 
 import android.app.ActivityManager
 import android.content.Context
+import android.content.SharedPreferences
 import com.example.service.VoiceAssistantService
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -9,8 +10,24 @@ import kotlinx.coroutines.flow.asStateFlow
 
 object AssistantStateRepository {
 
+    private const val PREFS_NAME = "voxora_assistant_prefs"
+    private const val KEY_EXPLICITLY_STOPPED = "key_explicitly_stopped"
+
     private val _isAssistantActive = MutableStateFlow(false)
     val isAssistantActive: StateFlow<Boolean> = _isAssistantActive.asStateFlow()
+
+    private fun getPrefs(context: Context): SharedPreferences {
+        return context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+    }
+
+    fun setExplicitlyStopped(context: Context, stopped: Boolean) {
+        getPrefs(context).edit().putBoolean(KEY_EXPLICITLY_STOPPED, stopped).apply()
+        _isAssistantActive.value = !stopped
+    }
+
+    fun isExplicitlyStopped(context: Context): Boolean {
+        return getPrefs(context).getBoolean(KEY_EXPLICITLY_STOPPED, true)
+    }
 
     fun setAssistantActive(active: Boolean) {
         _isAssistantActive.value = active
@@ -20,9 +37,10 @@ object AssistantStateRepository {
         val running = isServiceRunning(context)
         if (running) {
             _isAssistantActive.value = true
+        } else if (isExplicitlyStopped(context)) {
+            _isAssistantActive.value = false
         }
     }
-
 
     private fun isServiceRunning(context: Context): Boolean {
         val manager = context.getSystemService(Context.ACTIVITY_SERVICE) as? ActivityManager ?: return false
@@ -35,3 +53,4 @@ object AssistantStateRepository {
         return false
     }
 }
+
