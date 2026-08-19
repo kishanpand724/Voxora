@@ -43,6 +43,8 @@ object AssistantStateRepository {
         _isAssistantActive.value = active
         if (!active) {
             _listeningState.value = SpeechListeningState.STOPPED
+        } else if (_listeningState.value == SpeechListeningState.STOPPED) {
+            _listeningState.value = SpeechListeningState.WAITING_FOR_WAKE_WORD
         }
     }
 
@@ -58,11 +60,15 @@ object AssistantStateRepository {
         val running = isServiceRunning(context)
         if (running) {
             _isAssistantActive.value = true
+            if (_listeningState.value == SpeechListeningState.STOPPED) {
+                _listeningState.value = SpeechListeningState.WAITING_FOR_WAKE_WORD
+            }
         } else if (isExplicitlyStopped(context)) {
             _isAssistantActive.value = false
             _listeningState.value = SpeechListeningState.STOPPED
         }
     }
+
 
     private fun isServiceRunning(context: Context): Boolean {
         val manager = context.getSystemService(Context.ACTIVITY_SERVICE) as? ActivityManager ?: return false

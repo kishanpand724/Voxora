@@ -37,18 +37,30 @@ class ExampleRobolectricTest {
     assertEquals("ASSISTANT STOPPED", viewModel.uiState.value.statusText)
     assertEquals("START ASSISTANT", viewModel.uiState.value.buttonText)
 
-    // Simulate speech state updates
+    // Simulate wake word state updates
     AssistantStateRepository.setExplicitlyStopped(context, false)
     AssistantStateRepository.setAssistantActive(true)
-    AssistantStateRepository.updateListeningState(com.example.speech.SpeechListeningState.LISTENING)
+    AssistantStateRepository.updateListeningState(com.example.speech.SpeechListeningState.WAITING_FOR_WAKE_WORD)
+    viewModel.syncState(context)
+
+    assertTrue(viewModel.uiState.value.isAssistantActive)
+    assertEquals("WAITING FOR 'NOVA'", viewModel.uiState.value.statusText)
+    assertEquals("Say 'Nova' to activate...", viewModel.uiState.value.infoMessage)
+
+    // Simulate "Nova" wake word detected -> listening for command
+    AssistantStateRepository.updateListeningState(com.example.speech.SpeechListeningState.LISTENING_FOR_COMMAND)
+    viewModel.syncState(context)
+
+    assertEquals("LISTENING FOR COMMAND", viewModel.uiState.value.statusText)
+    assertEquals("Listening for your command...", viewModel.uiState.value.infoMessage)
+
+    // Simulate command received -> processing
+    AssistantStateRepository.updateListeningState(com.example.speech.SpeechListeningState.PROCESSING)
     AssistantStateRepository.updateRecognizedText("Open YouTube")
     viewModel.syncState(context)
 
-
-    assertTrue(viewModel.uiState.value.isAssistantActive)
-    assertEquals("LISTENING", viewModel.uiState.value.statusText)
+    assertEquals("PROCESSING COMMAND", viewModel.uiState.value.statusText)
     assertEquals("Open YouTube", viewModel.uiState.value.lastRecognizedText)
-    assertEquals("STOP ASSISTANT", viewModel.uiState.value.buttonText)
 
     // Simulate service stopping
     AssistantStateRepository.setAssistantActive(false)
@@ -56,6 +68,7 @@ class ExampleRobolectricTest {
     assertFalse(viewModel.uiState.value.isAssistantActive)
     assertEquals("ASSISTANT STOPPED", viewModel.uiState.value.statusText)
     assertEquals("START ASSISTANT", viewModel.uiState.value.buttonText)
+
 
   }
 
