@@ -44,7 +44,7 @@ object AssistantStateRepository {
         if (!active) {
             _listeningState.value = SpeechListeningState.STOPPED
         } else if (_listeningState.value == SpeechListeningState.STOPPED) {
-            _listeningState.value = SpeechListeningState.WAITING_FOR_NOVA
+            _listeningState.value = SpeechListeningState.WAITING_FOR_HEY_NOVA
         }
     }
 
@@ -61,7 +61,7 @@ object AssistantStateRepository {
         if (running) {
             _isAssistantActive.value = true
             if (_listeningState.value == SpeechListeningState.STOPPED) {
-                _listeningState.value = SpeechListeningState.WAITING_FOR_NOVA
+                _listeningState.value = SpeechListeningState.WAITING_FOR_HEY_NOVA
             }
         } else if (isExplicitlyStopped(context)) {
             _isAssistantActive.value = false
