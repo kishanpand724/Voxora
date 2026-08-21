@@ -9,6 +9,7 @@ import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
 import android.util.Log
+import java.util.concurrent.atomic.AtomicBoolean
 
 class CommandSpeechRecognizer(
     private val context: Context,
@@ -23,9 +24,15 @@ class CommandSpeechRecognizer(
     private var speechRecognizer: SpeechRecognizer? = null
     private val mainHandler = Handler(Looper.getMainLooper())
     private var isListening = false
+    private val hasHandledResult = AtomicBoolean(false)
 
     fun startListeningForCommand() {
         mainHandler.post {
+            if (hasHandledResult.get()) {
+                Log.d(TAG, "CommandSpeechRecognizer: Session already completed.")
+                return@post
+            }
+
             if (isListening) {
                 Log.d(TAG, "CommandSpeechRecognizer is already listening.")
                 return@post
@@ -33,7 +40,9 @@ class CommandSpeechRecognizer(
 
             if (!SpeechRecognizer.isRecognitionAvailable(context)) {
                 Log.w(TAG, "Speech recognition unavailable for command recognizer.")
-                onErrorOrTimeout()
+                if (hasHandledResult.compareAndSet(false, true)) {
+                    onErrorOrTimeout()
+                }
                 return@post
             }
 
@@ -64,37 +73,42 @@ class CommandSpeechRecognizer(
             } catch (e: Exception) {
                 Log.e(TAG, "CommandSpeechRecognizer: Error starting speech listening session", e)
                 isListening = false
-                onErrorOrTimeout()
+                if (hasHandledResult.compareAndSet(false, true)) {
+                    destroyInternal()
+                    onErrorOrTimeout()
+                }
             }
         }
     }
 
     fun stopListening() {
-        mainHandler.post {
-            isListening = false
-            mainHandler.removeCallbacksAndMessages(null)
-            try {
-                speechRecognizer?.stopListening()
-            } catch (e: Exception) {
-                Log.w(TAG, "CommandSpeechRecognizer: Error stopping speech recognizer", e)
-            }
-            Log.d(TAG, "CommandSpeechRecognizer: Stopped command listening.")
+        hasHandledResult.set(true)
+        if (Looper.myLooper() == Looper.getMainLooper()) {
+            destroyInternal()
+        } else {
+            mainHandler.post { destroyInternal() }
         }
     }
 
     fun destroy() {
-        mainHandler.post {
-            isListening = false
-            mainHandler.removeCallbacksAndMessages(null)
-            try {
-                speechRecognizer?.cancel()
-                speechRecognizer?.destroy()
-            } catch (e: Exception) {
-                Log.w(TAG, "CommandSpeechRecognizer: Error destroying speech recognizer", e)
-            }
-            speechRecognizer = null
-            Log.d(TAG, "CommandSpeechRecognizer: Destroyed and resources released.")
+        hasHandledResult.set(true)
+        if (Looper.myLooper() == Looper.getMainLooper()) {
+            destroyInternal()
+        } else {
+            mainHandler.post { destroyInternal() }
         }
+    }
+
+    private fun destroyInternal() {
+        isListening = false
+        try {
+            speechRecognizer?.cancel()
+            speechRecognizer?.destroy()
+        } catch (e: Exception) {
+            Log.w(TAG, "CommandSpeechRecognizer: Error destroying speech recognizer", e)
+        }
+        speechRecognizer = null
+        Log.d(TAG, "CommandSpeechRecognizer: Destroyed and resources released.")
     }
 
     override fun onReadyForSpeech(params: Bundle?) {
@@ -115,17 +129,22 @@ class CommandSpeechRecognizer(
     }
 
     override fun onError(error: Int) {
+        if (!hasHandledResult.compareAndSet(false, true)) return
+
         Log.w(TAG, "CommandSpeechRecognizer error code $error. Handled gracefully.")
         isListening = false
-        destroy()
+        destroyInternal()
         onErrorOrTimeout()
     }
 
     override fun onResults(results: Bundle?) {
+        if (!hasHandledResult.compareAndSet(false, true)) return
+
         isListening = false
         val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
         val recognizedCommand = matches?.firstOrNull()
-        destroy()
+        destroyInternal()
+
         if (!recognizedCommand.isNullOrBlank()) {
             Log.d(TAG, "CommandSpeechRecognizer final command result: \"$recognizedCommand\"")
             onCommandRecognized(recognizedCommand)
@@ -136,6 +155,7 @@ class CommandSpeechRecognizer(
     }
 
     override fun onPartialResults(partialResults: Bundle?) {
+        if (hasHandledResult.get()) return
         val matches = partialResults?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
         val text = matches?.firstOrNull()
         if (!text.isNullOrBlank()) {

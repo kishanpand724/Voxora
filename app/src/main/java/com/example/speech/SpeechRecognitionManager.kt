@@ -22,6 +22,8 @@ class SpeechRecognitionManager(private val context: Context) {
     @Volatile
     private var activeWakeWordSessionId: String? = null
 
+    private var pendingDisplayRunnable: Runnable? = null
+
     fun startListening() {
         mainHandler.post {
             if (!AssistantStateRepository.isAssistantActive.value) {
@@ -30,13 +32,12 @@ class SpeechRecognitionManager(private val context: Context) {
             }
 
             Log.d(TAG, "Starting Voxora wake-word state machine...")
-            AssistantStateRepository.updateListeningState(SpeechListeningState.WAITING_FOR_HEY_NOVA)
-
             startWakeWordMonitoring()
         }
     }
 
     private fun startWakeWordMonitoring() {
+        cancelPendingDisplayRunnable()
         stopCommandRecognizer()
 
         if (!AssistantStateRepository.isAssistantActive.value) {
@@ -124,10 +125,13 @@ class SpeechRecognitionManager(private val context: Context) {
         stopCommandRecognizer()
         Log.d(TAG, "Command listening stopped")
 
-        // Display command and return to WAITING_FOR_HEY_NOVA state
-        mainHandler.postDelayed({
+        cancelPendingDisplayRunnable()
+        val runnable = Runnable {
+            pendingDisplayRunnable = null
             returnToWaitingState()
-        }, DISPLAY_COMMAND_DELAY_MS)
+        }
+        pendingDisplayRunnable = runnable
+        mainHandler.postDelayed(runnable, DISPLAY_COMMAND_DELAY_MS)
     }
 
     private fun onCommandErrorOrTimeout() {
@@ -139,6 +143,7 @@ class SpeechRecognitionManager(private val context: Context) {
     }
 
     private fun returnToWaitingState() {
+        cancelPendingDisplayRunnable()
         if (AssistantStateRepository.isAssistantActive.value) {
             Log.d(TAG, "Returning to WAITING_FOR_HEY_NOVA")
             AssistantStateRepository.updateListeningState(SpeechListeningState.WAITING_FOR_HEY_NOVA)
@@ -146,6 +151,13 @@ class SpeechRecognitionManager(private val context: Context) {
         } else {
             Log.d(TAG, "Assistant stopped. Remaining in STOPPED state.")
             AssistantStateRepository.updateListeningState(SpeechListeningState.STOPPED)
+        }
+    }
+
+    private fun cancelPendingDisplayRunnable() {
+        pendingDisplayRunnable?.let {
+            mainHandler.removeCallbacks(it)
+            pendingDisplayRunnable = null
         }
     }
 
@@ -157,7 +169,7 @@ class SpeechRecognitionManager(private val context: Context) {
     fun stopListening() {
         mainHandler.post {
             activeWakeWordSessionId = null
-            mainHandler.removeCallbacksAndMessages(null)
+            cancelPendingDisplayRunnable()
             wakeWordDetector?.stopDetection()
             stopCommandRecognizer()
             Log.d(TAG, "Command listening stopped")
@@ -170,7 +182,7 @@ class SpeechRecognitionManager(private val context: Context) {
     fun destroy() {
         mainHandler.post {
             activeWakeWordSessionId = null
-            mainHandler.removeCallbacksAndMessages(null)
+            cancelPendingDisplayRunnable()
             wakeWordDetector?.destroy()
             wakeWordDetector = null
             stopCommandRecognizer()
