@@ -1,11 +1,13 @@
 package com.example.ui
 
+import com.example.command.CommandResult
 import com.example.speech.SpeechListeningState
 
 data class VoxoraUiState(
     val isAssistantActive: Boolean = false,
     val listeningState: SpeechListeningState = SpeechListeningState.STOPPED,
-    val lastRecognizedText: String? = null
+    val lastRecognizedText: String? = null,
+    val lastExecutionResult: CommandResult? = null
 ) {
     val statusText: String
         get() = when {
@@ -25,9 +27,9 @@ data class VoxoraUiState(
             !isAssistantActive -> "Start Voxora to activate your voice assistant."
             listeningState == SpeechListeningState.WAITING_FOR_HEY_NOVA -> "Say 'Hey Nova' to activate..."
             listeningState == SpeechListeningState.LISTENING_FOR_COMMAND -> "Listening for your command..."
-            listeningState == SpeechListeningState.PROCESSING -> "Processing command..."
+            listeningState == SpeechListeningState.PROCESSING -> lastExecutionResult?.resultMessage ?: "Processing command..."
             listeningState == SpeechListeningState.ERROR -> "Listening error occurred. Retrying..."
-            else -> "Voxora is active and listening in background."
+            else -> lastExecutionResult?.resultMessage ?: "Voxora is active and listening."
         }
 }
 

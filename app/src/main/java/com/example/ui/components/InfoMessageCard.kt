@@ -22,6 +22,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.command.CommandResult
 import com.example.ui.theme.LavenderPrimary
 import com.example.ui.theme.SurfaceGlass
 import com.example.ui.theme.TextSubtle
@@ -31,6 +32,7 @@ fun InfoMessageCard(
     isActive: Boolean,
     infoMessage: String,
     lastRecognizedText: String? = null,
+    lastExecutionResult: CommandResult? = null,
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -43,7 +45,7 @@ fun InfoMessageCard(
         if (!lastRecognizedText.isNullOrBlank() && isActive) {
             Box(
                 modifier = Modifier
-                    .padding(bottom = 12.dp)
+                    .padding(bottom = 8.dp)
                     .clip(RoundedCornerShape(12.dp))
                     .background(SurfaceGlass)
                     .border(1.dp, LavenderPrimary.copy(alpha = 0.3f), RoundedCornerShape(12.dp))
@@ -57,6 +59,33 @@ fun InfoMessageCard(
                     color = Color.White,
                     textAlign = TextAlign.Center,
                     modifier = Modifier.testTag("recognized_speech_text")
+                )
+            }
+        }
+
+        if (lastExecutionResult != null && isActive) {
+            val (borderColor, textColor) = when (lastExecutionResult) {
+                is CommandResult.Success -> Color(0xFF4CAF50) to Color(0xFF81C784)
+                is CommandResult.Error -> Color(0xFFE53935) to Color(0xFFEF5350)
+                is CommandResult.Unknown -> Color(0xFFFFB74D) to Color(0xFFFFCC80)
+            }
+
+            Box(
+                modifier = Modifier
+                    .padding(bottom = 12.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(borderColor.copy(alpha = 0.15f))
+                    .border(1.dp, borderColor.copy(alpha = 0.5f), RoundedCornerShape(12.dp))
+                    .padding(horizontal = 16.dp, vertical = 8.dp)
+                    .testTag("execution_result_card")
+            ) {
+                Text(
+                    text = lastExecutionResult.resultMessage,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = textColor,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.testTag("execution_result_text")
                 )
             }
         }

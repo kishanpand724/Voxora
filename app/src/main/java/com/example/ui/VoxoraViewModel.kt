@@ -38,6 +38,13 @@ class VoxoraViewModel : ViewModel() {
                 }
             }
         }
+        viewModelScope.launch {
+            AssistantStateRepository.lastExecutionResult.collect { result ->
+                _uiState.update { currentState ->
+                    currentState.copy(lastExecutionResult = result)
+                }
+            }
+        }
     }
 
     fun syncState(context: Context) {
@@ -46,7 +53,8 @@ class VoxoraViewModel : ViewModel() {
             it.copy(
                 isAssistantActive = AssistantStateRepository.isAssistantActive.value,
                 listeningState = AssistantStateRepository.listeningState.value,
-                lastRecognizedText = AssistantStateRepository.lastRecognizedText.value
+                lastRecognizedText = AssistantStateRepository.lastRecognizedText.value,
+                lastExecutionResult = AssistantStateRepository.lastExecutionResult.value
             )
         }
     }

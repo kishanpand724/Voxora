@@ -4,9 +4,22 @@ import android.content.Context
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
+import com.example.command.CommandProcessor
 import com.example.data.AssistantStateRepository
 import java.util.concurrent.atomic.AtomicLong
 
+/**
+ * SpeechRecognitionManager manages voice interaction flows for Voxora.
+ *
+ * Direct Flow (Wake-word disabled for current version):
+ * - START ASSISTANT -> Starts foreground service -> Direct command speech recognition
+ * -> Speech to text -> Process command -> Continue active command listening flow.
+ *
+ * Prepared Architecture for Future Wake-Word Overlay:
+ * - The WakeWordDetector architecture and WAITING_FOR_HEY_NOVA state remain preserved in code.
+ * - Future overlay flow: WakeWordDetector detects "Hey Nova" -> Show floating overlay ->
+ *   Command speech recognition -> Processing -> Hide overlay.
+ */
 class SpeechRecognitionManager(private val context: Context) {
 
     companion object {
@@ -15,6 +28,7 @@ class SpeechRecognitionManager(private val context: Context) {
     }
 
     private val mainHandler = Handler(Looper.getMainLooper())
+    private val commandProcessor = CommandProcessor(context)
     private var wakeWordDetector: WakeWordDetector? = null
     private var commandRecognizer: CommandSpeechRecognizer? = null
 
@@ -24,6 +38,9 @@ class SpeechRecognitionManager(private val context: Context) {
 
     private var pendingDisplayRunnable: Runnable? = null
 
+    /**
+     * Starts voice recognition flow. Directly starts command speech recognition for current version.
+     */
     fun startListening() {
         mainHandler.post {
             if (!AssistantStateRepository.isAssistantActive.value) {
@@ -31,11 +48,82 @@ class SpeechRecognitionManager(private val context: Context) {
                 return@post
             }
 
-            Log.d(TAG, "Starting Voxora wake-word state machine...")
-            startWakeWordMonitoring()
+            Log.d(TAG, "Starting direct command speech recognition flow...")
+            startCommandListeningDirectly()
         }
     }
 
+    /**
+     * Direct command recognition flow (bypassing passive wake-word monitoring).
+     */
+    private fun startCommandListeningDirectly() {
+        cancelPendingDisplayRunnable()
+        stopCommandRecognizer()
+
+        if (!AssistantStateRepository.isAssistantActive.value) {
+            Log.d(TAG, "Assistant inactive. Skipping command listening.")
+            return
+        }
+
+        Log.d(TAG, "Starting direct command speech recognition session...")
+        AssistantStateRepository.updateListeningState(SpeechListeningState.LISTENING_FOR_COMMAND)
+
+        commandRecognizer = CommandSpeechRecognizer(
+            context = context,
+            onCommandRecognized = { commandText ->
+                onCommandReceived(commandText)
+            },
+            onErrorOrTimeout = {
+                onCommandErrorOrTimeout()
+            }
+        ).apply {
+            startListeningForCommand()
+        }
+    }
+
+    private fun onCommandReceived(commandText: String) {
+        Log.d(TAG, "Command captured: \"$commandText\". Processing command...")
+        AssistantStateRepository.updateRecognizedText(commandText)
+        AssistantStateRepository.updateListeningState(SpeechListeningState.PROCESSING)
+
+        val result = commandProcessor.processCommand(commandText)
+        AssistantStateRepository.updateExecutionResult(result)
+
+        stopCommandRecognizer()
+        Log.d(TAG, "Command listening stopped")
+
+        cancelPendingDisplayRunnable()
+        val runnable = Runnable {
+            pendingDisplayRunnable = null
+            if (AssistantStateRepository.isAssistantActive.value) {
+                Log.d(TAG, "Command processing complete. Continuing direct command listening flow...")
+                startCommandListeningDirectly()
+            } else {
+                AssistantStateRepository.updateListeningState(SpeechListeningState.STOPPED)
+            }
+        }
+        pendingDisplayRunnable = runnable
+        mainHandler.postDelayed(runnable, DISPLAY_COMMAND_DELAY_MS)
+    }
+
+    private fun onCommandErrorOrTimeout() {
+        Log.w(TAG, "Command listening timed out or completed with error.")
+        stopCommandRecognizer()
+        Log.d(TAG, "Command listening stopped")
+
+        if (AssistantStateRepository.isAssistantActive.value) {
+            Log.d(TAG, "Restarting direct command listening session...")
+            startCommandListeningDirectly()
+        } else {
+            AssistantStateRepository.updateListeningState(SpeechListeningState.STOPPED)
+        }
+    }
+
+    /* =========================================================================
+     * MODULAR WAKE-WORD ARCHITECTURE (PREPARED FOR FUTURE OVERLAY IMPLEMENTATION)
+     * ========================================================================= */
+
+    @Suppress("unused")
     private fun startWakeWordMonitoring() {
         cancelPendingDisplayRunnable()
         stopCommandRecognizer()
@@ -45,7 +133,6 @@ class SpeechRecognitionManager(private val context: Context) {
             return
         }
 
-        // Generate a new Session ID token
         val newSessionId = "session_${System.currentTimeMillis()}_${sessionCounter.incrementAndGet()}"
         activeWakeWordSessionId = newSessionId
 
@@ -63,6 +150,7 @@ class SpeechRecognitionManager(private val context: Context) {
         }
     }
 
+    @Suppress("unused")
     private fun onWakeWordDetected(detectedSessionId: String) {
         val isActive = AssistantStateRepository.isAssistantActive.value
         val currentState = AssistantStateRepository.listeningState.value
@@ -70,89 +158,30 @@ class SpeechRecognitionManager(private val context: Context) {
 
         Log.d(TAG, "Wake word detected: $detectedSessionId")
 
-        // Strictly validate against all required conditions
         when {
             !isActive -> {
-                Log.d(TAG, "Wake word callback rejected")
-                Log.d(TAG, "Reason for rejection: Assistant is not active")
+                Log.d(TAG, "Wake word callback rejected: Assistant not active")
                 return
             }
             currentState != SpeechListeningState.WAITING_FOR_HEY_NOVA -> {
-                Log.d(TAG, "Wake word callback rejected")
-                Log.d(TAG, "Reason for rejection: Current state is $currentState, expected WAITING_FOR_HEY_NOVA")
+                Log.d(TAG, "Wake word callback rejected: Current state is $currentState")
                 return
             }
             detectedSessionId != expectedSessionId || expectedSessionId == null -> {
-                Log.d(TAG, "Wake word callback rejected")
-                Log.d(TAG, "Reason for rejection: Session ID mismatch or expired (detected=$detectedSessionId, active=$expectedSessionId)")
+                Log.d(TAG, "Wake word callback rejected: Session ID mismatch or expired")
                 return
             }
         }
 
-        // Callback accepted!
         Log.d(TAG, "Wake word callback accepted for session: $detectedSessionId")
-
-        // Immediately invalidate session token so the same session cannot trigger again
         activeWakeWordSessionId = null
-
-        // Stop wake word detector for current session
         wakeWordDetector?.stopDetection()
 
-        // Transition state to LISTENING_FOR_COMMAND
-        AssistantStateRepository.updateListeningState(SpeechListeningState.LISTENING_FOR_COMMAND)
-        Log.d(TAG, "Command listening started")
-
-        // Activate single-turn command speech recognizer
-        stopCommandRecognizer()
-        commandRecognizer = CommandSpeechRecognizer(
-            context = context,
-            onCommandRecognized = { commandText ->
-                onCommandReceived(commandText)
-            },
-            onErrorOrTimeout = {
-                onCommandErrorOrTimeout()
-            }
-        ).apply {
-            startListeningForCommand()
-        }
+        // Transition to direct command listening
+        startCommandListeningDirectly()
     }
 
-    private fun onCommandReceived(commandText: String) {
-        Log.d(TAG, "Command captured: \"$commandText\". Transitioning to PROCESSING state...")
-        AssistantStateRepository.updateRecognizedText(commandText)
-        AssistantStateRepository.updateListeningState(SpeechListeningState.PROCESSING)
-
-        stopCommandRecognizer()
-        Log.d(TAG, "Command listening stopped")
-
-        cancelPendingDisplayRunnable()
-        val runnable = Runnable {
-            pendingDisplayRunnable = null
-            returnToWaitingState()
-        }
-        pendingDisplayRunnable = runnable
-        mainHandler.postDelayed(runnable, DISPLAY_COMMAND_DELAY_MS)
-    }
-
-    private fun onCommandErrorOrTimeout() {
-        Log.w(TAG, "Command listening timed out or failed.")
-        stopCommandRecognizer()
-        Log.d(TAG, "Command listening stopped")
-
-        returnToWaitingState()
-    }
-
-    private fun returnToWaitingState() {
-        cancelPendingDisplayRunnable()
-        if (AssistantStateRepository.isAssistantActive.value) {
-            Log.d(TAG, "Returning to WAITING_FOR_HEY_NOVA")
-            AssistantStateRepository.updateListeningState(SpeechListeningState.WAITING_FOR_HEY_NOVA)
-            startWakeWordMonitoring()
-        } else {
-            Log.d(TAG, "Assistant stopped. Remaining in STOPPED state.")
-            AssistantStateRepository.updateListeningState(SpeechListeningState.STOPPED)
-        }
-    }
+    /* ========================================================================= */
 
     private fun cancelPendingDisplayRunnable() {
         pendingDisplayRunnable?.let {
@@ -174,7 +203,6 @@ class SpeechRecognitionManager(private val context: Context) {
             stopCommandRecognizer()
             Log.d(TAG, "Command listening stopped")
             AssistantStateRepository.updateListeningState(SpeechListeningState.STOPPED)
-            Log.d(TAG, "Returning to WAITING_FOR_HEY_NOVA")
             Log.d(TAG, "Voxora voice assistant listening stopped.")
         }
     }

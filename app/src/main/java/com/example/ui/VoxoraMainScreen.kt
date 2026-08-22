@@ -196,7 +196,8 @@ fun VoxoraMainContent(
                 InfoMessageCard(
                     isActive = uiState.isAssistantActive,
                     infoMessage = uiState.infoMessage,
-                    lastRecognizedText = uiState.lastRecognizedText
+                    lastRecognizedText = uiState.lastRecognizedText,
+                    lastExecutionResult = uiState.lastExecutionResult
                 )
 
             }

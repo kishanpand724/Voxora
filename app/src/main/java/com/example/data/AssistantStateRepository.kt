@@ -3,6 +3,7 @@ package com.example.data
 import android.app.ActivityManager
 import android.content.Context
 import android.content.SharedPreferences
+import com.example.command.CommandResult
 import com.example.service.VoiceAssistantService
 import com.example.speech.SpeechListeningState
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -22,6 +23,9 @@ object AssistantStateRepository {
 
     private val _lastRecognizedText = MutableStateFlow<String?>(null)
     val lastRecognizedText: StateFlow<String?> = _lastRecognizedText.asStateFlow()
+
+    private val _lastExecutionResult = MutableStateFlow<CommandResult?>(null)
+    val lastExecutionResult: StateFlow<CommandResult?> = _lastExecutionResult.asStateFlow()
 
     private fun getPrefs(context: Context): SharedPreferences {
         return context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -44,7 +48,7 @@ object AssistantStateRepository {
         if (!active) {
             _listeningState.value = SpeechListeningState.STOPPED
         } else if (_listeningState.value == SpeechListeningState.STOPPED) {
-            _listeningState.value = SpeechListeningState.WAITING_FOR_HEY_NOVA
+            _listeningState.value = SpeechListeningState.LISTENING_FOR_COMMAND
         }
     }
 
@@ -56,12 +60,16 @@ object AssistantStateRepository {
         _lastRecognizedText.value = text
     }
 
+    fun updateExecutionResult(result: CommandResult?) {
+        _lastExecutionResult.value = result
+    }
+
     fun syncServiceState(context: Context) {
         val running = isServiceRunning(context)
         if (running) {
             _isAssistantActive.value = true
             if (_listeningState.value == SpeechListeningState.STOPPED) {
-                _listeningState.value = SpeechListeningState.WAITING_FOR_HEY_NOVA
+                _listeningState.value = SpeechListeningState.LISTENING_FOR_COMMAND
             }
         } else if (isExplicitlyStopped(context)) {
             _isAssistantActive.value = false

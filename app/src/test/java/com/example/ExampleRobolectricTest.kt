@@ -91,6 +91,30 @@ class ExampleRobolectricTest {
     VoiceAssistantService.stopService(context)
     assertTrue(AssistantStateRepository.isExplicitlyStopped(context))
   }
+
+  @Test
+  fun `test command processor and app launcher command handling`() {
+    val context = ApplicationProvider.getApplicationContext<Context>()
+    val commandProcessor = com.example.command.CommandProcessor(context)
+
+    // Test uninstalled/mock app returning clean message
+    val fakeResult = commandProcessor.processCommand("Open NonExistentApp999")
+    assertTrue(fakeResult is com.example.command.CommandResult.Error)
+    assertEquals("App is not installed", fakeResult.resultMessage)
+
+    // Test English and Hindi app launch command parsing structure
+    val appLauncher = com.example.command.AppLauncherCommandHandler()
+
+    assertTrue(appLauncher.canHandle("open youtube"))
+    assertTrue(appLauncher.canHandle("youtube kholo"))
+    assertTrue(appLauncher.canHandle("start youtube"))
+    assertTrue(appLauncher.canHandle("open chrome"))
+    assertTrue(appLauncher.canHandle("chrome kholo"))
+    assertTrue(appLauncher.canHandle("open whatsapp"))
+    assertTrue(appLauncher.canHandle("whatsapp kholo"))
+
+    assertFalse(appLauncher.canHandle("something unrelated 123"))
+  }
 }
 
 
