@@ -3,6 +3,7 @@ package com.example.command
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.content.pm.ResolveInfo
 import android.os.Build
 import android.util.Log
 
@@ -11,56 +12,69 @@ class AppLauncherCommandHandler : CommandHandler {
     companion object {
         private const val TAG = "AppLauncherHandler"
 
-        private val LAUNCH_PREFIXES = listOf("open ", "launch ", "start ", "run ", "go to ")
+        private val LAUNCH_PREFIXES = listOf("open ", "launch ", "start ", "run ", "go to ", "open up ")
         private val LAUNCH_SUFFIXES = listOf(
             " kholo", " khol do", " khol", " chalu karo", " chalao", " open karo", " start karo", " chalu"
         )
     }
 
-    private data class AppMetadata(val displayName: String, val packages: List<String>)
+    private data class AppMetadata(
+        val displayName: String,
+        val aliases: List<String>,
+        val knownPackages: List<String>
+    )
 
-    private val knownAppMap: Map<String, AppMetadata> = mapOf(
-        "youtube" to AppMetadata("YouTube", listOf("com.google.android.youtube")),
-        "yt" to AppMetadata("YouTube", listOf("com.google.android.youtube")),
-
-        "chrome" to AppMetadata("Chrome", listOf("com.android.chrome")),
-        "google chrome" to AppMetadata("Chrome", listOf("com.android.chrome")),
-        "browser" to AppMetadata("Chrome", listOf("com.android.chrome", "com.sec.android.app.sbrowser")),
-
-        "whatsapp" to AppMetadata("WhatsApp", listOf("com.whatsapp", "com.whatsapp.w4b")),
-        "whats app" to AppMetadata("WhatsApp", listOf("com.whatsapp", "com.whatsapp.w4b")),
-
-        "gmail" to AppMetadata("Gmail", listOf("com.google.android.gm")),
-        "google mail" to AppMetadata("Gmail", listOf("com.google.android.gm")),
-        "email" to AppMetadata("Gmail", listOf("com.google.android.gm", "com.android.email")),
-
-        "maps" to AppMetadata("Google Maps", listOf("com.google.android.apps.maps")),
-        "google maps" to AppMetadata("Google Maps", listOf("com.google.android.apps.maps")),
-
-        "play store" to AppMetadata("Play Store", listOf("com.android.vending")),
-        "playstore" to AppMetadata("Play Store", listOf("com.android.vending")),
-        "google play" to AppMetadata("Play Store", listOf("com.android.vending")),
-        "store" to AppMetadata("Play Store", listOf("com.android.vending")),
-
-        "settings" to AppMetadata("Settings", listOf("com.android.settings")),
-        "setting" to AppMetadata("Settings", listOf("com.android.settings")),
-
-        "camera" to AppMetadata("Camera", listOf("com.google.android.GoogleCamera", "com.android.camera", "com.sec.android.app.camera")),
-
-        "calculator" to AppMetadata("Calculator", listOf("com.google.android.calculator", "com.android.calculator2", "com.sec.android.app.popupcalculator")),
-
-        "clock" to AppMetadata("Clock", listOf("com.google.android.deskclock", "com.sec.android.app.clockpackage", "com.android.deskclock")),
-
-        "photos" to AppMetadata("Photos", listOf("com.google.android.apps.photos")),
-        "gallery" to AppMetadata("Gallery", listOf("com.sec.android.gallery3d", "com.miui.gallery")),
-
-        "instagram" to AppMetadata("Instagram", listOf("com.instagram.android")),
-        "insta" to AppMetadata("Instagram", listOf("com.instagram.android")),
-        "spotify" to AppMetadata("Spotify", listOf("com.spotify.music")),
-        "telegram" to AppMetadata("Telegram", listOf("org.telegram.messenger")),
-        "facebook" to AppMetadata("Facebook", listOf("com.facebook.katana")),
-        "twitter" to AppMetadata("X", listOf("com.twitter.android")),
-        "x" to AppMetadata("X", listOf("com.twitter.android"))
+    private val knownApps: List<AppMetadata> = listOf(
+        AppMetadata(
+            displayName = "YouTube",
+            aliases = listOf("youtube", "yt", "you tube"),
+            knownPackages = listOf("com.google.android.youtube", "com.google.android.youtube.tv")
+        ),
+        AppMetadata(
+            displayName = "Chrome",
+            aliases = listOf("chrome", "google chrome", "browser"),
+            knownPackages = listOf("com.android.chrome", "com.google.android.apps.chrome")
+        ),
+        AppMetadata(
+            displayName = "WhatsApp",
+            aliases = listOf("whatsapp", "whats app", "whatsapp business"),
+            knownPackages = listOf("com.whatsapp", "com.whatsapp.w4b")
+        ),
+        AppMetadata(
+            displayName = "Gmail",
+            aliases = listOf("gmail", "google mail", "email"),
+            knownPackages = listOf("com.google.android.gm")
+        ),
+        AppMetadata(
+            displayName = "Google Maps",
+            aliases = listOf("maps", "google maps"),
+            knownPackages = listOf("com.google.android.apps.maps")
+        ),
+        AppMetadata(
+            displayName = "Play Store",
+            aliases = listOf("play store", "playstore", "google play", "store"),
+            knownPackages = listOf("com.android.vending")
+        ),
+        AppMetadata(
+            displayName = "Settings",
+            aliases = listOf("settings", "setting"),
+            knownPackages = listOf("com.android.settings")
+        ),
+        AppMetadata(
+            displayName = "Camera",
+            aliases = listOf("camera"),
+            knownPackages = listOf("com.google.android.GoogleCamera", "com.android.camera", "com.sec.android.app.camera")
+        ),
+        AppMetadata(
+            displayName = "Calculator",
+            aliases = listOf("calculator"),
+            knownPackages = listOf("com.google.android.calculator", "com.android.calculator2", "com.sec.android.app.popupcalculator")
+        ),
+        AppMetadata(
+            displayName = "Photos",
+            aliases = listOf("photos", "gallery"),
+            knownPackages = listOf("com.google.android.apps.photos", "com.sec.android.gallery3d", "com.miui.gallery")
+        )
     )
 
     override fun canHandle(normalizedText: String): Boolean {
@@ -69,63 +83,150 @@ class AppLauncherCommandHandler : CommandHandler {
 
         val hasPrefix = LAUNCH_PREFIXES.any { clean.startsWith(it) }
         val hasSuffix = LAUNCH_SUFFIXES.any { clean.endsWith(it) }
-        val isDirectKnownApp = knownAppMap.containsKey(clean)
 
-        return hasPrefix || hasSuffix || isDirectKnownApp
+        val isKnownAlias = knownApps.any { meta ->
+            meta.aliases.any { alias -> clean == alias || clean.endsWith(" $alias") || clean.startsWith("$alias ") }
+        }
+
+        return hasPrefix || hasSuffix || isKnownAlias
     }
 
     override fun execute(context: Context, rawCommand: String, normalizedText: String): CommandResult {
-        val targetAppQuery = extractTargetApp(normalizedText)
-        if (targetAppQuery.isBlank()) {
+        val targetQuery = extractTargetAppQuery(normalizedText)
+        if (targetQuery.isBlank()) {
+            logExecutionDetail(
+                recognizedAppName = rawCommand,
+                matchedPackageName = null,
+                intentFound = false,
+                launchResult = "App query is blank"
+            )
             return CommandResult.Error(rawCommand, "App is not installed")
         }
 
-        Log.d(TAG, "Extracted app query: \"$targetAppQuery\" from raw command: \"$rawCommand\"")
-
-        val knownMetadata = knownAppMap[targetAppQuery]
-        val packageCandidates = knownMetadata?.packages ?: emptyList()
+        val metadata = findAppMetadata(targetQuery)
+        val recognizedAppName = metadata?.displayName ?: targetQuery.capitalizeWords()
+        val searchAliases = metadata?.aliases ?: listOf(targetQuery)
+        val knownPackages = metadata?.knownPackages ?: emptyList()
 
         val pm = context.packageManager
+        val launchableApps = getInstalledLaunchableApps(pm)
 
-        // 1. Try candidates in known package map
-        for (pkg in packageCandidates) {
+        // 1. Search by application label / name
+        for (resolveInfo in launchableApps) {
+            val label = resolveInfo.loadLabel(pm).toString().trim().lowercase()
+            val packageName = resolveInfo.activityInfo.packageName
+
+            val isMatch = searchAliases.any { alias ->
+                label == alias || label.contains(alias) || alias.contains(label)
+            }
+
+            if (isMatch) {
+                val launchIntent = pm.getLaunchIntentForPackage(packageName)
+                if (launchIntent != null) {
+                    return launchAppAndReturnResult(
+                        context = context,
+                        rawCommand = rawCommand,
+                        recognizedAppName = recognizedAppName,
+                        packageName = packageName,
+                        launchIntent = launchIntent,
+                        matchMethod = "label search ('$label')"
+                    )
+                }
+            }
+        }
+
+        // 2. Fallback: Search by known package name
+        for (pkg in knownPackages) {
             val launchIntent = pm.getLaunchIntentForPackage(pkg)
             if (launchIntent != null) {
-                try {
-                    launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                    context.startActivity(launchIntent)
-                    val appName = knownMetadata?.displayName ?: targetAppQuery.capitalizeWords()
-                    Log.d(TAG, "Successfully launched $appName ($pkg)")
-                    return CommandResult.Success(rawCommand, "Opening $appName...")
-                } catch (e: Exception) {
-                    Log.e(TAG, "Failed to start activity for $pkg", e)
-                }
+                return launchAppAndReturnResult(
+                    context = context,
+                    rawCommand = rawCommand,
+                    recognizedAppName = recognizedAppName,
+                    packageName = pkg,
+                    launchIntent = launchIntent,
+                    matchMethod = "known package fallback"
+                )
             }
         }
 
-        // 2. Fallback: Query installed launcher applications dynamically
-        val dynamicPackage = findInstalledAppPackageByName(context, targetAppQuery)
-        if (dynamicPackage != null) {
-            val launchIntent = pm.getLaunchIntentForPackage(dynamicPackage)
-            if (launchIntent != null) {
-                try {
-                    launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                    context.startActivity(launchIntent)
-                    val formattedName = targetAppQuery.capitalizeWords()
-                    Log.d(TAG, "Successfully launched dynamic app $formattedName ($dynamicPackage)")
-                    return CommandResult.Success(rawCommand, "Opening $formattedName...")
-                } catch (e: Exception) {
-                    Log.e(TAG, "Failed to start activity for dynamic package $dynamicPackage", e)
-                }
-            }
+        // 3. Fallback: Direct package intent check if query is a package
+        val directIntent = pm.getLaunchIntentForPackage(targetQuery)
+        if (directIntent != null) {
+            return launchAppAndReturnResult(
+                context = context,
+                rawCommand = rawCommand,
+                recognizedAppName = recognizedAppName,
+                packageName = targetQuery,
+                launchIntent = directIntent,
+                matchMethod = "direct package intent"
+            )
         }
 
-        // 3. App not found or launch intent unresolvable
-        Log.w(TAG, "Target app \"$targetAppQuery\" is not installed or cannot be opened.")
+        // 4. App not installed / launch intent not found
+        logExecutionDetail(
+            recognizedAppName = recognizedAppName,
+            matchedPackageName = null,
+            intentFound = false,
+            launchResult = "App is not installed"
+        )
         return CommandResult.Error(rawCommand, "App is not installed")
     }
 
-    private fun extractTargetApp(normalizedText: String): String {
+    private fun launchAppAndReturnResult(
+        context: Context,
+        rawCommand: String,
+        recognizedAppName: String,
+        packageName: String,
+        launchIntent: Intent,
+        matchMethod: String
+    ): CommandResult {
+        return try {
+            launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            context.startActivity(launchIntent)
+
+            logExecutionDetail(
+                recognizedAppName = recognizedAppName,
+                matchedPackageName = packageName,
+                intentFound = true,
+                launchResult = "Successfully launched via $matchMethod"
+            )
+
+            CommandResult.Success(rawCommand, "Opening $recognizedAppName...")
+        } catch (e: Exception) {
+            Log.e(TAG, "Error starting activity for $packageName", e)
+
+            logExecutionDetail(
+                recognizedAppName = recognizedAppName,
+                matchedPackageName = packageName,
+                intentFound = true,
+                launchResult = "Activity launch failed: ${e.message}"
+            )
+
+            CommandResult.Error(rawCommand, "App is not installed")
+        }
+    }
+
+    private fun logExecutionDetail(
+        recognizedAppName: String,
+        matchedPackageName: String?,
+        intentFound: Boolean,
+        launchResult: String
+    ) {
+        Log.d(TAG, "=== App Launch Execution Details ===")
+        Log.d(TAG, " - Recognized App Name : $recognizedAppName")
+        Log.d(TAG, " - Matched Package Name : ${matchedPackageName ?: "None"}")
+        Log.d(TAG, " - Launch Intent Found  : $intentFound")
+        Log.d(TAG, " - Launch Result        : $launchResult")
+    }
+
+    private fun findAppMetadata(query: String): AppMetadata? {
+        return knownApps.firstOrNull { meta ->
+            meta.aliases.any { alias -> alias == query || query.contains(alias) || alias.contains(query) }
+        }
+    }
+
+    private fun extractTargetAppQuery(normalizedText: String): String {
         var clean = normalizedText.trim()
 
         for (prefix in LAUNCH_PREFIXES) {
@@ -142,7 +243,6 @@ class AppLauncherCommandHandler : CommandHandler {
             }
         }
 
-        // Clean trailing filler words
         clean = clean.removeSuffix(" app")
             .removePrefix("app ")
             .removeSuffix(" please")
@@ -151,29 +251,20 @@ class AppLauncherCommandHandler : CommandHandler {
         return clean
     }
 
-    private fun findInstalledAppPackageByName(context: Context, query: String): String? {
+    private fun getInstalledLaunchableApps(pm: PackageManager): List<ResolveInfo> {
         return try {
-            val pm = context.packageManager
             val mainIntent = Intent(Intent.ACTION_MAIN, null).apply {
                 addCategory(Intent.CATEGORY_LAUNCHER)
             }
-            val resolveInfos = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                 pm.queryIntentActivities(mainIntent, PackageManager.ResolveInfoFlags.of(0))
             } else {
                 @Suppress("DEPRECATION")
                 pm.queryIntentActivities(mainIntent, 0)
             }
-
-            for (info in resolveInfos) {
-                val label = info.loadLabel(pm).toString().lowercase()
-                if (label == query || label.contains(query)) {
-                    return info.activityInfo.packageName
-                }
-            }
-            null
         } catch (e: Exception) {
-            Log.e(TAG, "Error querying installed applications", e)
-            null
+            Log.e(TAG, "Error querying launchable activities", e)
+            emptyList()
         }
     }
 
