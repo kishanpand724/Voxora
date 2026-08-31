@@ -1,1 +1,1 @@
-An AI Mobile Controller
+An AI voice device Controller
